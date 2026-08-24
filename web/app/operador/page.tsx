@@ -1,43 +1,71 @@
 "use client";
-import { FormEvent, useState } from "react";
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+import { useEffect, useState } from "react";
+import { api, Rota } from "../../lib/api";
 
 export default function OperadorPage() {
-  const [nome, setNome] = useState("Rota do dia");
+  const [nome, setNome] = useState("");
+  const [rota, setRota] = useState<Rota | null>(null);
   const [endereco, setEndereco] = useState("");
-  const [rotaId, setRotaId] = useState<number | null>(null);
-  const [msg, setMsg] = useState("");
-  async function criarRota(e: FormEvent) {
-    e.preventDefault();
-    const r = await fetch(`${API}/api/v1/rotas`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome }),
-    }).then((x) => x.json());
-    setRotaId(r.id); setMsg(`Rota #${r.id} criada`);
+  const [ordem, setOrdem] = useState(0);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    api.rotasHoje().then((rs) => rs.length && setRota(rs[rs.length - 1])).catch(() => {});
+  }, []);
+
+  async function criarRota() {
+    if (!nome.trim()) { setErro("Informe o nome"); return; }
+    try {
+      const r = await api.criarRota(nome.trim());
+      setRota(r);
+      setNome("");
+      setErro("");
+    } catch (e) { setErro(String(e)); }
   }
-  async function addParada(e: FormEvent) {
-    e.preventDefault();
-    if (!rotaId) return;
-    await fetch(`${API}/api/v1/rotas/${rotaId}/paradas`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endereco }),
-    });
-    setEndereco(""); setMsg("Parada adicionada");
+
+  async function addParada() {
+    if (!rota || !endereco.trim()) { setErro("Informe o endereço"); return; }
+    try {
+      const r = await api.addParada(rota.id, endereco.trim(), ordem);
+      setRota(r);
+      setEndereco("");
+      setOrdem(ordem + 1);
+      setErro("");
+    } catch (e) { setErro(String(e)); }
   }
+
   return (
-    <main>
+    <main style={{ padding: 24, fontFamily: "sans-serif" }}>
       <h1>Operador</h1>
-      <form onSubmit={criarRota}>
-        <input value={nome} onChange={(e) => setNome(e.target.value)} />
-        <button type="submit">Criar rota</button>
-      </form>
-      {rotaId && (
-        <form onSubmit={addParada} style={{ marginTop: 16 }}>
-          <input value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Endereço" required />
-          <button type="submit">Add parada</button>
-        </form>
+      {!rota && (
+        <div>
+          <input placeholder="Nome da rota" value={nome} onChange={(e) => setNome(e.target.value)} />
+          <button onClick={criarRota}>Criar rota de hoje</button>
+        </div>
       )}
-      {msg && <p>{msg}</p>}
+      {erro && <p style={{ color: "red" }}>{erro}</p>}
+      {rota && (
+        <>
+          <h2>{rota.nome}</h2>
+          <p>
+            Total: {rota.contagens.total_paradas} | Feitas: {rota.contagens.feitas} |
+            Pendentes: {rota.contagens.pendentes} | Problemas: {rota.contagens.problemas}
+          </p>
+          <ol>
+            {rota.paradas.map((p) => (
+              <li key={p.id}>[{p.ordem}] {p.endereco} — {p.status}</li>
+            ))}
+          </ol>
+          <div>
+            <input placeholder="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} />
+            <input type="number" value={ordem} onChange={(e) => setOrdem(Number(e.target.value))} style={{ width: 60 }} />
+            <button onClick={addParada}>Adicionar parada</button>
+          </div>
+          <p><a href={`/rota`}>Ir para check-in →</a></p>
+        </>
+      )}
+      <a href="/">voltar</a>
     </main>
   );
 }

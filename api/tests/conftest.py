@@ -18,3 +18,14 @@ dbmod.SessionLocal = sessionmaker(bind=dbmod.engine, autoflush=False, autocommit
 from app.database import Base, init_db
 
 init_db()
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
