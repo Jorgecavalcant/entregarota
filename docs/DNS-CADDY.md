@@ -1,18 +1,10 @@
-# DNS e Caddy — EntregaRota
+# DNS / Caddy — lembrete
 
-## DNS (CEO cria)
+O DNS do domínio é responsabilidade exclusiva do operador humano.
+Este projeto NÃO configura DNS automaticamente.
 
-| Tipo | Host | Aponta para |
-|---|---|---|
-| A | `entregarota` | IP da VPS Tech42 |
-| ou CNAME | `entregarota` | nome canônico da VPS |
+Lembrete mínimo (documentação apenas):
+- Aponte um registro A/AAAA do domínio para o servidor.
+- Caddy pode emitir certificado TLS automático após o DNS propagar.
 
-Resultado: `entregarota.tech42.com.br`
-
-## VPS
-
-`/srv/projetos/clientes/entregarota`
-
-## Caddy
-
-Ver `Caddyfile.example` na raiz.
+Não há secrets nem domínios reais neste repositório.
