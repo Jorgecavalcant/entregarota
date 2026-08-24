@@ -4,6 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth import require_operador
 from app.database import get_db
 from app.models import Rota, Parada
 from app.schemas import (
@@ -50,7 +51,7 @@ def listar_rotas(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=RotaOut, status_code=201)
-def criar_rota(payload: RotaIn, db: Session = Depends(get_db)):
+def criar_rota(payload: RotaIn, db: Session = Depends(get_db), _op: str = Depends(require_operador)):
     rota = Rota(nome=payload.nome, data=payload.data or date.today())
     db.add(rota)
     db.commit()
@@ -67,7 +68,7 @@ def obter_rota(rota_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{rota_id}/paradas", response_model=RotaOut, status_code=201)
-def add_parada(rota_id: int, payload: ParadaIn, db: Session = Depends(get_db)):
+def add_parada(rota_id: int, payload: ParadaIn, db: Session = Depends(get_db), _op: str = Depends(require_operador)):
     rota = db.get(Rota, rota_id)
     if not rota:
         raise HTTPException(status_code=404, detail="Rota não encontrada")
@@ -79,7 +80,7 @@ def add_parada(rota_id: int, payload: ParadaIn, db: Session = Depends(get_db)):
 
 
 @router.post("/paradas/{parada_id}/checkin", response_model=ParadaOut)
-def checkin(parada_id: int, payload: CheckinIn, db: Session = Depends(get_db)):
+def checkin(parada_id: int, payload: CheckinIn, db: Session = Depends(get_db), _op: str = Depends(require_operador)):
     parada = db.get(Parada, parada_id)
     if not parada:
         raise HTTPException(status_code=404, detail="Parada não encontrada")
@@ -96,7 +97,7 @@ def checkin(parada_id: int, payload: CheckinIn, db: Session = Depends(get_db)):
 
 
 @router.post("/paradas/{parada_id}/pendencia", response_model=ParadaOut)
-def registrar_pendencia(parada_id: int, payload: PendenciaIn, db: Session = Depends(get_db)):
+def registrar_pendencia(parada_id: int, payload: PendenciaIn, db: Session = Depends(get_db), _op: str = Depends(require_operador)):
     parada = db.get(Parada, parada_id)
     if not parada:
         raise HTTPException(status_code=404, detail="Parada não encontrada")

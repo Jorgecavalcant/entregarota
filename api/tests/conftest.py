@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+os.environ["DEMO_USER"] = "demo"
+os.environ["DEMO_PASS"] = "demo123"
+os.environ["DEMO_TOKEN_SECRET"] = "test-secret"
 
 from app.config import get_settings
 
@@ -29,3 +32,11 @@ from app.main import app
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def auth_headers(client):
+    r = client.post("/api/v1/auth/demo", json={"usuario": "demo", "senha": "demo123"})
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

@@ -5,7 +5,19 @@
 
 ## Login
 
-**Sem login** — ferramenta interna de operador (demo aberta).
+**Automático no front** — o app chama `POST /api/v1/auth/demo` com o usuário demo (`demo` / `demo123`) e envia o token Bearer automaticamente nas mutações.
+
+Para testar a API direto:
+
+```bash
+curl -s -X POST https://entregarota.tech42.com.br/api/v1/auth/demo \
+  -H 'Content-Type: application/json' \
+  -d '{"usuario":"demo","senha":"demo123"}'
+# use o access_token no header: Authorization: Bearer <token>
+```
+
+Mutações (criar rota, parada, check-in, pendência, charge) sem token → **401**.
+GETs (hoje, listar, obter, pendências, mapa, providers, health) ficam abertos.
 
 ## Seed
 
