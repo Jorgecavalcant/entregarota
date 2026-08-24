@@ -1,4 +1,4 @@
-# EntregaRota — SPEC (MVP evoluído ox-alpha)
+# EntregaRota — SPEC (MVP)
 
 ## API (FastAPI, prefixo /api/v1)
 - GET /health
