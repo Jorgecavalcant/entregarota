@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth import require_operador
 from app.payments import get_provider, list_providers
 from app.schemas import ChargeIn, ChargeOut, PaymentProviderOut
 
@@ -12,7 +13,7 @@ def providers():
 
 
 @router.post("/charge", response_model=ChargeOut)
-def charge(payload: ChargeIn):
+def charge(payload: ChargeIn, _op: str = Depends(require_operador)):
     try:
         provider = get_provider(payload.provider)
     except KeyError as e:

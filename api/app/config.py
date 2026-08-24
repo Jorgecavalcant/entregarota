@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     database_url: str = "sqlite+pysqlite:///./entregarota.db"
     api_cors_origins: str = "http://localhost:3000"
+    demo_user: str = "demo"
+    demo_pass: str = "demo123"
+    demo_token_secret: str = "dev-secret-change-me"
 
     @property
     def cors_list(self) -> list[str]:
