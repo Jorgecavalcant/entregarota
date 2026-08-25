@@ -3,102 +3,135 @@ export const API_URL =
 
 const TOKEN_KEY = "er_demo_token";
 
-let authPromise: Promise<string> | null = null;
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
 
-async function loginDemo(): Promise<string> {
+export function setToken(token: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function loginDemo(usuario: string, senha: string): Promise<string> {
   const res = await fetch(`${API_URL}/api/v1/auth/demo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ usuario: "demo", senha: "demo123" }),
+    body: JSON.stringify({ usuario, senha }),
   });
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  const body = await res.json();
-  const token: string = body.access_token;
-  if (typeof window !== "undefined") window.localStorage.setItem(TOKEN_KEY, token);
-  return token;
+  if (!res.ok) throw new Error("Falha no login");
+  const data = await res.json();
+  setToken(data.access_token);
+  return data.access_token as string;
 }
 
-export async function ensureAuth(): Promise<string> {
-  const cached = typeof window !== "undefined" ? window.localStorage.getItem(TOKEN_KEY) : null;
-  if (cached) return cached;
-  if (!authPromise) {
-    authPromise = loginDemo().catch((e) => {
-      authPromise = null;
-      throw e;
-    });
+export function isAuthenticated(): boolean {
+  return !!getToken();
+}
+
+async function req<T>(
+  path: string,
+  options: RequestInit & { mutation?: boolean } = {}
+): Promise<T> {
+  const token = getToken();
+  const method = (options.method ?? "GET").toUpperCase();
+  const isMutation = options.mutation === true || method !== "GET";
+  if (isMutation && !token) throw new Error("AUTH_REQUIRED");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+    cache: "no-store",
+  });
+
+  if (res.status === 401) {
+    clearToken();
+    throw new Error("AUTH_REQUIRED");
   }
-  return authPromise;
-}
-
-function clearAuth() {
-  if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
-  authPromise = null;
-}
-
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const isMutation = (init?.method ?? "GET") !== "GET";
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (isMutation || path.startsWith("/api/v1/rotas")) {
+  if (!res.ok) {
+    let detail = `Erro ${res.status}`;
     try {
-      headers["Authorization"] = `Bearer ${await ensureAuth()}`;
-    } catch {
-      /* segue sem header; API responde 401 e tratamos abaixo */
-    }
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (typeof body.detail?.[0]?.msg === "string")
+        detail = body.detail[0].msg;
+    } catch {}
+    throw new Error(detail);
   }
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
-  if (res.status === 401 && !path.startsWith("/api/v1/auth")) {
-    // token expirado/inválido: renova uma vez e repete
-    clearAuth();
-    headers["Authorization"] = `Bearer ${await ensureAuth()}`;
-    const retry = await fetch(`${API_URL}${path}`, { ...init, headers });
-    if (!retry.ok) throw new Error(`${retry.status} ${await retry.text()}`);
-    return retry.json();
-  }
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  return res.json();
+  return (await res.json()) as T;
 }
 
+// ---- Types (contrato real do backend) ----
 export interface Contagens {
   total_paradas: number;
   feitas: number;
   pendentes: number;
   problemas: number;
 }
+
+export type ParadaStatus = "pendente" | "feito" | "problema";
+
 export interface Parada {
   id: number;
   endereco: string;
   ordem: number;
-  status: string;
-  lat: number | null;
-  lng: number | null;
-  accuracy_m: number | null;
-  checked_at: string | null;
+  status: ParadaStatus;
+  lat?: number | null;
+  lng?: number | null;
+  accuracy_m?: number | null;
+  checked_at?: string | null;
+  pendencia?: string | null;
 }
+
 export interface Rota {
   id: number;
   nome: string;
-  data: string;
+  data?: string;
   paradas: Parada[];
   contagens: Contagens;
 }
 
 export const api = {
   rotasHoje: () => req<Rota[]>("/api/v1/rotas/hoje"),
+
   criarRota: (nome: string) =>
-    req<Rota>("/api/v1/rotas", { method: "POST", body: JSON.stringify({ nome }) }),
+    req<Rota>("/api/v1/rotas", {
+      method: "POST",
+      mutation: true,
+      body: JSON.stringify({ nome }),
+    }),
+
   addParada: (rotaId: number, endereco: string, ordem: number) =>
     req<Rota>(`/api/v1/rotas/${rotaId}/paradas`, {
       method: "POST",
+      mutation: true,
       body: JSON.stringify({ endereco, ordem }),
     }),
+
   checkin: (paradaId: number, lat: number, lng: number, accuracy_m?: number) =>
     req<Parada>(`/api/v1/rotas/paradas/${paradaId}/checkin`, {
       method: "POST",
-      body: JSON.stringify({ lat, lng, accuracy_m }),
+      mutation: true,
+      body: JSON.stringify(
+        accuracy_m !== undefined ? { lat, lng, accuracy_m } : { lat, lng }
+      ),
     }),
+
   pendencia: (paradaId: number, texto: string) =>
     req<Parada>(`/api/v1/rotas/paradas/${paradaId}/pendencia`, {
       method: "POST",
+      mutation: true,
       body: JSON.stringify({ texto }),
     }),
 };

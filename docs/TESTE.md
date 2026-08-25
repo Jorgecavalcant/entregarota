@@ -1,35 +1,84 @@
-# Como testar — EntregaRota (2 min)
+# TESTE.md — EntregaRota
 
-**URL:** https://entregarota.tech42.com.br  
-**Local:** `make up` → http://localhost:3000 · API http://localhost:8000/docs
+Guia de teste manual ponta a ponta.
 
-## Login
+## Login explícito
 
-**Automático no front** — o app chama `POST /api/v1/auth/demo` com o usuário demo (`demo` / `demo123`) e envia o token Bearer automaticamente nas mutações.
+O login é sempre manual, na página /entrar:
 
-Para testar a API direto:
+1. Abra /entrar.
+2. Use as credenciais demo:
+   - Usuário: demo
+   - Senha: demo123
+3. Em sucesso, o token fica salvo em localStorage sob a chave er_demo_token
+   e você é redirecionado para o parâmetro next ou para /.
 
-```bash
-curl -s -X POST https://entregarota.tech42.com.br/api/v1/auth/demo \
-  -H 'Content-Type: application/json' \
-  -d '{"usuario":"demo","senha":"demo123"}'
-# use o access_token no header: Authorization: Bearer <token>
-```
+Não há auto-login, login silencioso nem retry automático. Falhou? Entre de novo.
 
-Mutações (criar rota, parada, check-in, pendência, charge) sem token → **401**.
-GETs (hoje, listar, obter, pendências, mapa, providers, health) ficam abertos.
+## Fluxo principal
 
-## Seed
+### 1. Entrar → Operador
 
-Não há seed automático. Você cria a rota pela tela.
+1. Faça login em /entrar com demo / demo123.
+2. Vá em /operador.
+3. Crie uma rota informando um nome (ex.: "Centro — manhã").
+4. Adicione paradas: endereço obrigatório, ordem opcional
+   (se vazia, assume a próxima ordem disponível).
+5. A lista de paradas aparece com badge de status (pendente).
 
-## Fluxo feliz
+### 2. Operador → Rota (execução)
 
-1. Abra https://entregarota.tech42.com.br/operador → criar rota do dia (paradas).
-2. Abra https://entregarota.tech42.com.br/rota → ver rota e fazer **check-in** (geo/ping).
-3. Registrar pendência se quiser.
-4. Pagamento (se aparecer): **manual/demo**.
+1. Clique em "Executar a rota" (ou navegue direto a /rota).
+2. Confira os stats Total / Feitas / Pendentes / Problemas e a barra de progresso.
+3. Em cada parada pendente:
+   - Fazer check-in → pede permissão de GPS → envia lat/lng → status vira "feito",
+     contagens e progresso atualizam.
+   - Registrar problema → texto com mínimo 3 caracteres → status vira "problema".
+4. Coordenadas ficam visíveis em "Ver pontos" (<details>), junto de accuracy e horário.
 
-## Nota
+### 3. Empty state de /rota
 
-Se a API falhar no browser após deploy antigo, o front precisa ter sido buildado com `NEXT_PUBLIC_API_URL=https://entregarota.tech42.com.br` (Dockerfile com `ARG`/`ENV`).
+Se não houver rota hoje, /rota mostra a mensagem "Nenhuma rota para hoje"
+com um link/botão para /operador. Não há redirecionamento automático —
+o usuário escolhe ir criar a rota.
+
+## GPS negado
+
+Se a permissão de localização for negada (ou expirar), o botão NÃO marca a parada
+e exibe a mensagem humana:
+
+    Precisamos da sua localização só no check-in. Permita o GPS e tente de novo.
+
+Nenhum dado é enviado à API nesse caso.
+
+## Comportamento de auth
+
+- Toda mutação (POST) sem token lança AUTH_REQUIRED antes de bater na rede.
+- Qualquer resposta 401 limpa o token e dispara redirect para /entrar?next=<path>.
+- GETs (/api/v1/rotas/hoje) são abertos no backend; o Bearer vai junto se existir token.
+
+## Ambientes
+
+### Local
+
+1. Suba tudo com make up.
+2. Frontend: http://localhost:3000
+3. API + Swagger: http://localhost:8000/docs
+
+### Produção
+
+- App e API no mesmo host: https://entregarota.tech42.com.br
+- Swagger: https://entregarota.tech42.com.br/docs
+
+## Checklist curto
+
+- [ ] /entrar loga com demo / demo123 e salva er_demo_token
+- [ ] Senha errada mostra alerta de erro sem travar o form
+- [ ] /rota sem login → redirect /entrar?next=/rota
+- [ ] /rota sem rota hoje mostra mensagem + link para /operador (sem redirect)
+- [ ] /operador cria rota e adiciona paradas (lista com badge pendente)
+- [ ] Check-in pede GPS, muda status para feito, stats/progresso atualizam
+- [ ] GPS negado mostra a mensagem humana e não envia nada
+- [ ] Pendência com menos de 3 caracteres fica desabilitada
+- [ ] Sair limpa o token e volta para /entrar
+- [ ] Em prod, app e docs respondem no mesmo host

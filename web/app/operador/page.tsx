@@ -1,198 +1,216 @@
 "use client";
 
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { api, Rota } from "../../lib/api";
+import { useRouter } from "next/navigation";
+import { useRequireAuth } from "../../lib/useRequireAuth";
+import { Parada, Rota, api } from "../../lib/api";
+
+function badgeFor(status: Parada["status"]) {
+  if (status === "feito") return "badge badge--feita";
+  if (status === "problema") return "badge badge--problema";
+  return "badge badge--pendente";
+}
 
 export default function OperadorPage() {
-  const [nome, setNome] = useState("");
+  const { ready, logout } = useRequireAuth();
+  const router = useRouter();
+
   const [rota, setRota] = useState<Rota | null>(null);
-  const [endereco, setEndereco] = useState("");
-  const [ordem, setOrdem] = useState(0);
-  const [erro, setErro] = useState("");
-  const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [nomeRota, setNomeRota] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [ordem, setOrdem] = useState("");
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rotas = await api.rotasHoje();
+      setRota(rotas.length > 0 ? rotas[0] : null);
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/operador");
+        return;
+      }
+      setErro("Não foi possível carregar as rotas de hoje.");
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
-    api
-      .rotasHoje()
-      .then((rs) => {
-        if (rs.length) setRota(rs[rs.length - 1]);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    if (ready) carregar();
+  }, [ready, carregar]);
 
-  async function criarRota() {
-    if (!nome.trim()) {
-      setErro("Informe o nome da rota.");
-      return;
-    }
+  async function criarNovaRota(e: FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    setMsg(null);
     try {
-      const r = await api.criarRota(nome.trim());
-      setRota(r);
-      setNome("");
-      setErro("");
-      setOk("Rota criada. Agora adicione as paradas.");
-      setOrdem(0);
-    } catch (e) {
-      setErro(String(e));
+      const nova = await api.criarRota(nomeRota.trim());
+      setRota(nova);
+      setMsg(`Rota "${nova.nome}" criada. Agora adicione as paradas.`);
+      setNomeRota("");
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/operador");
+        return;
+      }
+      setErro(e.message || "Falha ao criar rota.");
     }
   }
 
-  async function addParada() {
-    if (!rota || !endereco.trim()) {
-      setErro("Informe o endereço da parada.");
-      return;
-    }
+  async function adicionarParada(e: FormEvent) {
+    e.preventDefault();
+    if (!rota) return;
+    setErro(null);
+    setMsg(null);
     try {
-      const r = await api.addParada(rota.id, endereco.trim(), ordem);
-      setRota(r);
+      const atualizada = await api.addParada(
+        rota.id,
+        endereco.trim(),
+        ordem.trim() === "" ? rota.paradas.length + 1 : Number(ordem)
+      );
+      setRota(atualizada);
       setEndereco("");
-      setOrdem(ordem + 1);
-      setErro("");
-      setOk(`Parada ${ordem} adicionada.`);
-    } catch (e) {
-      setErro(String(e));
+      setOrdem("");
+      setMsg("Parada adicionada à rota.");
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/operador");
+        return;
+      }
+      setErro(e.message || "Falha ao adicionar parada.");
     }
   }
+
+  if (!ready) return null;
+
+  if (loading) {
+    return (
+      <main className="shell">
+        <p className="hint">Carregando…</p>
+      </main>
+    );
+  }
+
+  const c = rota?.contagens;
 
   return (
     <main className="shell">
-      <div className="brand-row">
-        <span className="brand-mark" aria-hidden="true" />
-        <p className="brand-name">EntregaRota</p>
-      </div>
-
-      <p className="eyebrow">Painel do operador</p>
-      <h1>Montar a rota</h1>
-      <p className="lede">Crie a rota do dia e enfileire as paradas na ordem do trajeto.</p>
-
-      {loading && (
-        <div className="state-block" role="status">
-          Carregando…
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <p className="eyebrow">Operação</p>
+          <h2>Painel do operador</h2>
         </div>
-      )}
+        <button className="btn btn-secondary" onClick={logout}>Sair</button>
+      </header>
 
-      {erro && (
-        <div className="alert alert--error" role="alert">
-          {erro}
-        </div>
-      )}
-      {ok && (
-        <div className="alert alert--ok" role="status">
-          {ok}
-        </div>
-      )}
+      {msg && <p className="alert alert--ok">{msg}</p>}
+      {erro && <p className="alert alert--error">{erro}</p>}
 
-      {!loading && !rota && (
-        <div className="panel">
-          <div className="field">
-            <label className="field-label" htmlFor="nome-rota">
-              Nome da rota
+      {!rota ? (
+        <div className="panel state-block">
+          <h2>Nenhuma rota para hoje</h2>
+          <p className="lede">Dê um nome à rota de hoje para começar.</p>
+          <form onSubmit={criarNovaRota} className="form-row">
+            <label className="field">
+              <span className="field-label">Nome da rota</span>
+              <input
+                className="field-input"
+                value={nomeRota}
+                onChange={(e) => setNomeRota(e.target.value)}
+                placeholder="Ex.: Centro — manhã"
+                required
+              />
             </label>
-            <input
-              id="nome-rota"
-              className="field-input"
-              placeholder="Ex.: Zona Norte — manhã"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-            />
-          </div>
-          <button type="button" className="btn btn-primary" onClick={criarRota}>
-            Criar rota de hoje
-          </button>
+            <button className="btn btn-primary" type="submit">Criar rota</button>
+          </form>
         </div>
-      )}
-
-      {!loading && rota && (
+      ) : (
         <>
           <div className="panel">
-            <h2 className="h2">{rota.nome}</h2>
-            <div className="stats" aria-label="Resumo da rota">
+            <h2>{rota.nome}</h2>
+            <div className="stats">
               <div className="stat">
-                <div className="stat-value">{rota.contagens.total_paradas}</div>
-                <div className="stat-label">Total</div>
+                <span className="stat-value">{c?.total_paradas ?? rota.paradas.length}</span>
+                <span className="stat-label">Total</span>
               </div>
               <div className="stat stat--done">
-                <div className="stat-value">{rota.contagens.feitas}</div>
-                <div className="stat-label">Feitas</div>
+                <span className="stat-value">{c?.feitas ?? 0}</span>
+                <span className="stat-label">Feitas</span>
               </div>
               <div className="stat stat--accent">
-                <div className="stat-value">{rota.contagens.pendentes}</div>
-                <div className="stat-label">Pendentes</div>
+                <span className="stat-value">{c?.pendentes ?? 0}</span>
+                <span className="stat-label">Pendentes</span>
               </div>
               <div className="stat stat--warn">
-                <div className="stat-value">{rota.contagens.problemas}</div>
-                <div className="stat-label">Problemas</div>
+                <span className="stat-value">{c?.problemas ?? 0}</span>
+                <span className="stat-label">Problemas</span>
               </div>
             </div>
+          </div>
 
+          <div className="panel">
+            <h2>Adicionar parada</h2>
+            <form onSubmit={adicionarParada}>
+              <label className="field">
+                <span className="field-label">Endereço da parada</span>
+                <input
+                  className="field-input"
+                  value={endereco}
+                  onChange={(e) => setEndereco(e.target.value)}
+                  placeholder="Rua, número — cliente"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">Ordem (opcional)</span>
+                <input
+                  className="field-input"
+                  type="number"
+                  min={1}
+                  value={ordem}
+                  onChange={(e) => setOrdem(e.target.value)}
+                  placeholder={`${rota.paradas.length + 1}`}
+                />
+              </label>
+              <button className="btn btn-primary" type="submit">
+                Adicionar parada
+              </button>
+            </form>
+          </div>
+
+          <div className="panel">
+            <h2>Paradas ({rota.paradas.length})</h2>
             {rota.paradas.length === 0 ? (
-              <p className="hint">Ainda sem paradas. Adicione a primeira abaixo.</p>
+              <p className="hint">Nenhuma parada ainda. Adicione a primeira acima.</p>
             ) : (
-              <ol className="timeline">
+              <ul className="timeline" style={{ listStyle: "none", padding: 0 }}>
                 {rota.paradas.map((p) => (
                   <li key={p.id} className="parada">
-                    <span className="parada-dot" data-status={p.status} aria-hidden="true" />
                     <div className="parada-head">
-                      <span className="parada-ordem">#{p.ordem}</span>
-                      <span className="parada-endereco">{p.endereco}</span>
-                      <span className={`badge badge--${p.status === "feita" ? "feita" : p.status === "problema" ? "problema" : "pendente"}`}>
-                        {p.status}
-                      </span>
+                      <span className="parada-ordem">{p.ordem}</span>
+                      <span className={`parada-dot parada-dot--${p.status}`} />
+                      <h3 className="parada-endereco">{p.endereco}</h3>
+                      <span className={badgeFor(p.status)}>{p.status}</span>
                     </div>
                   </li>
                 ))}
-              </ol>
+              </ul>
             )}
           </div>
 
-          <div className="panel">
-            <h2 className="h2">Nova parada</h2>
-            <div className="form-row">
-              <div className="field">
-                <label className="field-label" htmlFor="endereco">
-                  Endereço
-                </label>
-                <input
-                  id="endereco"
-                  className="field-input"
-                  placeholder="Rua, número, bairro"
-                  value={endereco}
-                  onChange={(e) => setEndereco(e.target.value)}
-                />
-              </div>
-              <div className="field" style={{ flex: "0 0 auto", minWidth: 72 }}>
-                <label className="field-label" htmlFor="ordem">
-                  Ordem
-                </label>
-                <input
-                  id="ordem"
-                  className="field-input field-input--sm"
-                  type="number"
-                  value={ordem}
-                  onChange={(e) => setOrdem(Number(e.target.value))}
-                  aria-label="Ordem da parada no trajeto"
-                />
-              </div>
-              <button type="button" className="btn btn-primary" onClick={addParada}>
-                Adicionar parada
-              </button>
-            </div>
-          </div>
-
-          <p>
-            <Link className="btn btn-secondary" href="/rota">
-              Ir para check-in →
+          <div className="nav-cards">
+            <Link href="/rota" className="nav-card">
+              Executar a rota →
             </Link>
-          </p>
+          </div>
         </>
       )}
-
-      <Link className="back-link" href="/">
-        ← voltar
-      </Link>
     </main>
   );
 }

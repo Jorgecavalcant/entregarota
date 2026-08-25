@@ -1,39 +1,66 @@
-"use client";
-
 import Link from "next/link";
 
-export default function Home() {
+export default function HomePage() {
   return (
     <main className="shell">
       <div className="brand-row">
-        <span className="brand-mark" aria-hidden="true" />
-        <p className="brand-name">EntregaRota</p>
+        <span className="brand-mark">ER</span>
+        <span className="brand-name">EntregaRota</span>
       </div>
 
-      <p className="eyebrow">Trajeto e movimento</p>
-      <h1>Sua rota de hoje</h1>
-      <p className="lede">
-        Distribuição local com check-in no lugar certo — parada a parada, sem ruído.
-      </p>
+      <section className="hero-route">
+        <p className="eyebrow">Gestão de entregas</p>
+        <h1>Sua operação de rota em um só lugar</h1>
+        <p className="lede">
+          Crie rotas, distribua paradas e acompanhe check-ins com GPS do time de
+          campo — direto do celular ou do painel.
+        </p>
+        <div className="hero-kpis">
+          <div className="hero-kpi">
+            <strong>—</strong>
+            <span>Rotas hoje</span>
+          </div>
+          <div className="hero-kpi">
+            <strong>—</strong>
+            <span>Paradas feitas</span>
+          </div>
+          <div className="hero-kpi">
+            <strong>—</strong>
+            <span>Problemas</span>
+          </div>
+        </div>
+        <p className="hint">
+          Entre para ver os números reais da sua operação.
+        </p>
+      </section>
 
-      <div className="hero-route" aria-hidden="true" />
+      <nav className="nav-cards" aria-label="Navegação principal">
+        <Link href="/entrar" className="nav-card">
+          Entrar
+          <small>Login demo demo / demo123</small>
+        </Link>
+        <Link href="/operador" className="nav-card">
+          Operador
+          <small>Criar rota e adicionar paradas</small>
+        </Link>
+        <Link href="/rota" className="nav-card">
+          Rota de hoje
+          <small>Check-in e pendências no campo</small>
+        </Link>
+        <Link href="/settings" className="nav-card">
+          Configurações
+          <small>Empresa, janelas e tolerância</small>
+        </Link>
+        <Link href="/users" className="nav-card">
+          Equipe
+          <small>Operadores e entregadores</small>
+        </Link>
+      </nav>
 
-      <ul className="nav-cards">
-        <li>
-          <Link className="nav-card" href="/rota" aria-label="Abrir minha rota de hoje para check-in">
-            <strong>Minha rota de hoje</strong>
-            <span>Check-in do entregador com geolocalização</span>
-          </Link>
-        </li>
-        <li>
-          <Link className="nav-card" href="/operador" aria-label="Abrir painel do operador para criar rota">
-            <strong>Operador</strong>
-            <span>Criar a rota do dia e adicionar paradas</span>
-          </Link>
-        </li>
-      </ul>
-
-      <p className="footer-note">EntregaRota · Tech42</p>
+      <footer className="site-footer">
+        <span>EntregaRota · Tech42</span>
+        <span>v2.0</span>
+      </footer>
     </main>
   );
 }
