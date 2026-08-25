@@ -486,6 +486,12 @@ textarea:focus {
   color: var(--color-success);
 }
 
+.alert--warn {
+  background: rgba(230, 200, 74, 0.12);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
 .error {
   color: var(--color-error);
 }

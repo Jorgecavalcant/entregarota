@@ -110,6 +110,12 @@ export default function UsersPage() {
         <Link href="/">Voltar</Link>
       </header>
 
+      <div className="alert alert--warn" role="note">
+        ⚠️ Demonstração local: esta lista fica salva somente neste navegador e
+        não cria login de acesso real. Adicionar ou editar um usuário aqui não
+        libera senha nem entrada no sistema.
+      </div>
+
       {alert && <div className="alert">{alert}</div>}
 
       <section className="panel">

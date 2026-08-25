@@ -18,6 +18,26 @@ function badgeFor(status: Parada["status"]) {
 
 type CheckPhase = "gps" | "sending";
 
+function mensagemErroGeolocalizacao(e: unknown): string {
+  if (typeof window !== "undefined" && !("geolocation" in navigator)) {
+    return "Este aparelho ou navegador não tem suporte a GPS. Use um celular com localização habilitada para fazer o check-in.";
+  }
+  if (e && typeof e === "object" && "code" in e) {
+    const code = (e as GeolocationPositionError).code;
+    switch (code) {
+      case 1: // PERMISSION_DENIED
+        return "Você negou o acesso à localização. Vá nas configurações do navegador ou do aparelho, permita o GPS para este site e tente de novo.";
+      case 2: // POSITION_UNAVAILABLE
+        return "Não conseguimos obter sua localização agora. Verifique se o GPS do aparelho está ligado e tente em um local com sinal melhor.";
+      case 3: // TIMEOUT
+        return "A busca pela localização demorou demais. Tente novamente — se possível, em área aberta, longe de paredes ou prédios altos.";
+      default:
+        return "Não conseguimos usar o GPS agora. Verifique a localização do aparelho e tente novamente.";
+    }
+  }
+  return "Precisamos da sua localização só no check-in. Permita o GPS e tente de novo.";
+}
+
 export default function RotaPage() {
   const { ready, logout } = useRequireAuth();
   const router = useRouter();
@@ -59,6 +79,11 @@ export default function RotaPage() {
     setLoadingCheckinId(p.id);
     setCheckPhase("gps");
     try {
+      if (!("geolocation" in navigator)) {
+        setErro(mensagemErroGeolocalizacao(null));
+        return;
+      }
+
       let coords: GeolocationPosition;
       try {
         coords = await new Promise<GeolocationPosition>((res, rej) =>
@@ -67,15 +92,18 @@ export default function RotaPage() {
             timeout: 10000,
           })
         );
-      } catch {
-        setErro(
-          "Precisamos da sua localização só no check-in. Permita o GPS e tente de novo."
-        );
+      } catch (gpsError) {
+        setErro(mensagemErroGeolocalizacao(gpsError));
         return;
       }
 
       setCheckPhase("sending");
-      await api.checkin(p.id, coords.coords.latitude, coords.coords.longitude);
+      await api.checkin(
+        p.id,
+        coords.coords.latitude,
+        coords.coords.longitude,
+        coords.coords.accuracy
+      );
       setMsg(`Check-in registrado em ${p.endereco}.`);
       await carregar();
     } catch (e: any) {

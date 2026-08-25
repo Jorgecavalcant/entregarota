@@ -13,6 +13,9 @@ type Settings = {
 };
 
 const STORAGE_KEY = "er_settings";
+// raioGpsMetros continua salvo por compatibilidade, mas hoje não é lido em
+// nenhuma validação real de check-in — por isso o campo fica oculto no
+// formulário até estar de fato conectado ao fluxo de GPS.
 const DEFAULTS: Settings = {
   nomeEmpresa: "",
   cnpj: "",
@@ -56,10 +59,6 @@ export default function SettingsPage() {
       setError("Informe o nome da empresa.");
       return;
     }
-    if (!Number.isFinite(form.raioGpsMetros) || form.raioGpsMetros < 10) {
-      setError("O raio GPS deve ser no mínimo 10 metros.");
-      return;
-    }
     if (form.janelaFim <= form.janelaInicio) {
       setError("A janela de fim deve ser após a janela de início.");
       return;
@@ -96,9 +95,14 @@ export default function SettingsPage() {
         <p className="eyebrow">Configurações</p>
         <h1>Ajustes da operação</h1>
         <p className="lede">
-          Defina os dados da empresa, a janela de entregas e o raio de precisão
-          do GPS usado nas confirmações.
+          Defina os dados da empresa e a janela de entregas.
         </p>
+        <div className="alert alert--warn" role="note">
+          ⚠️ Estas configurações ficam salvas <strong>somente neste aparelho</strong>{" "}
+          (armazenamento local do navegador). Elas não são enviadas ao servidor
+          e não aparecem em outro celular, computador ou usuário que acesse o
+          EntregaRota.
+        </div>
 
         {ok && <div className="alert alert--ok">{ok}</div>}
         {error && <div className="alert alert--error">{error}</div>}
@@ -159,23 +163,6 @@ export default function SettingsPage() {
                 type="time"
                 value={form.janelaFim}
                 onChange={(e) => update("janelaFim", e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label className="field-label" htmlFor="raioGpsMetros">
-                Raio GPS (metros, mínimo 10)
-              </label>
-              <input
-                id="raioGpsMetros"
-                className="field-input"
-                type="number"
-                min={10}
-                step={1}
-                value={form.raioGpsMetros}
-                onChange={(e) =>
-                  update("raioGpsMetros", Number(e.target.value))
-                }
               />
             </div>
 

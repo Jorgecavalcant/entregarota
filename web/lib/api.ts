@@ -24,7 +24,15 @@ export async function loginDemo(usuario: string, senha: string): Promise<string>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ usuario, senha }),
   });
-  if (!res.ok) throw new Error("Falha no login");
+  if (!res.ok) {
+    let detail = `Não foi possível entrar (erro ${res.status}).`;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (typeof body.detail?.[0]?.msg === "string") detail = body.detail[0].msg;
+    } catch {}
+    throw new Error(detail);
+  }
   const data = await res.json();
   setToken(data.access_token);
   return data.access_token as string;
