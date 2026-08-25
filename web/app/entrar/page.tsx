@@ -18,10 +18,10 @@ function EntrarForm() {
     setLoading(true);
     try {
       await loginDemo(usuario.trim(), senha);
-      const next = params.get("next") || "/";
+      const next = params.get("next") || "/rota";
       router.replace(next);
-    } catch {
-      setErro("Não foi possível entrar. Verifique usuário e senha.");
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível entrar. Verifique usuário e senha.");
       setLoading(false);
     }
   }
