@@ -820,3 +820,33 @@ textarea:focus {
   gap: var(--space-unit);
   flex-wrap: wrap;
 }
+
+/* ---- light theme (rua / sol) ---- */
+html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+
+[data-theme="light"] {
+  --color-bg: #F3F6F4;
+  --color-surface: #FFFFFF;
+  --color-brand: #1F4A3A;
+  --color-accent: #9A7B0A;
+  --color-accent-hover: #7A6208;
+  --color-text: #0C1512;
+  --color-muted: #3D5248;
+  --color-border: #C5D0CA;
+  --color-success: #1F7A4A;
+  --color-error: #C23B3B;
+  --color-disabled: #8A9A90;
+  --color-ring: #1F4A3A;
+  --color-on-accent: #FFFFFF;
+  --shadow-soft: 0 8px 24px rgba(12, 21, 18, 0.12);
+}
+
+.theme-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  font-weight: 600;
+  box-shadow: var(--shadow-soft);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}

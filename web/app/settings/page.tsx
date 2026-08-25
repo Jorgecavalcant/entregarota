@@ -1,90 +1,193 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useState } from "react";
 import { useRequireAuth } from "../../lib/useRequireAuth";
+
+type Settings = {
+  nomeEmpresa: string;
+  cnpj: string;
+  janelaInicio: string;
+  janelaFim: string;
+  raioGpsMetros: number;
+};
+
+const STORAGE_KEY = "er_settings";
+const DEFAULTS: Settings = {
+  nomeEmpresa: "",
+  cnpj: "",
+  janelaInicio: "08:00",
+  janelaFim: "18:00",
+  raioGpsMetros: 50,
+};
 
 export default function SettingsPage() {
   const { ready, logout } = useRequireAuth();
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [form, setForm] = useState<Settings>(DEFAULTS);
+  const [ok, setOk] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  function salvarEmBreve() {
-    setAviso("Salvar configurações estará disponível em breve.");
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<Settings>;
+        setForm({ ...DEFAULTS, ...parsed });
+      }
+    } catch {
+      // ignore storage errors
+    }
+    setLoaded(true);
+  }, []);
+
+  function update<K extends keyof Settings>(key: K, value: Settings[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setOk(null);
+    setError(null);
   }
 
-  if (!ready) return null;
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setOk(null);
+    setError(null);
+
+    if (!form.nomeEmpresa.trim()) {
+      setError("Informe o nome da empresa.");
+      return;
+    }
+    if (!Number.isFinite(form.raioGpsMetros) || form.raioGpsMetros < 10) {
+      setError("O raio GPS deve ser no mínimo 10 metros.");
+      return;
+    }
+    if (form.janelaFim <= form.janelaInicio) {
+      setError("A janela de fim deve ser após a janela de início.");
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ ...form, raioGpsMetros: Number(form.raioGpsMetros) })
+      );
+      setOk("Configurações salvas com sucesso.");
+    } catch {
+      setError("Não foi possível salvar as configurações.");
+    }
+  }
+
+  if (!ready) {
+    return null;
+  }
 
   return (
-    <main className="shell">
+    <div className="shell">
       <header className="page-header">
-        <div className="brand-row" style={{ marginBottom: 0 }}>
+        <div className="brand-row">
           <span className="brand-mark">ER</span>
           <span className="brand-name">EntregaRota</span>
         </div>
-        <button className="btn btn-ghost" onClick={logout}>Sair</button>
+        <Link href="/" className="btn btn-ghost">
+          ← Voltar
+        </Link>
       </header>
 
-      <div>
+      <main className="panel">
         <p className="eyebrow">Configurações</p>
         <h1>Ajustes da operação</h1>
         <p className="lede">
-          Defina dados da empresa, janelas de entrega e tolerância geográfica.
-          As alterações ainda não podem ser salvas nesta versão.
+          Defina os dados da empresa, a janela de entregas e o raio de precisão
+          do GPS usado nas confirmações.
         </p>
-      </div>
 
-      {aviso && <p className="alert alert--ok">{aviso}</p>}
+        {ok && <div className="alert alert--ok">{ok}</div>}
+        {error && <div className="alert alert--error">{error}</div>}
 
-      <section className="panel section">
-        <h2>Empresa</h2>
-        <label className="field">
-          <span className="field-label">Nome da empresa</span>
-          <input className="field-input" placeholder="Ex.: Entregas Tech42 LTDA" disabled />
-        </label>
-        <label className="field">
-          <span className="field-label">CNPJ</span>
-          <input className="field-input" placeholder="00.000.000/0000-00" disabled />
-        </label>
-      </section>
+        {!loaded ? (
+          <p className="lede">Carregando configurações…</p>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label className="field-label" htmlFor="nomeEmpresa">
+                Nome da empresa *
+              </label>
+              <input
+                id="nomeEmpresa"
+                className="field-input"
+                type="text"
+                value={form.nomeEmpresa}
+                onChange={(e) => update("nomeEmpresa", e.target.value)}
+                placeholder="Ex.: EntregaRota Logística LTDA"
+                required
+              />
+            </div>
 
-      <section className="panel section">
-        <h2>Janelas de entrega</h2>
-        <label className="field">
-          <span className="field-label">Início padrão</span>
-          <input className="field-input" type="time" defaultValue="08:00" disabled />
-        </label>
-        <label className="field">
-          <span className="field-label">Fim padrão</span>
-          <input className="field-input" type="time" defaultValue="18:00" disabled />
-        </label>
-      </section>
+            <div className="field">
+              <label className="field-label" htmlFor="cnpj">
+                CNPJ
+              </label>
+              <input
+                id="cnpj"
+                className="field-input"
+                type="text"
+                value={form.cnpj}
+                onChange={(e) => update("cnpj", e.target.value)}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
 
-      <section className="panel section">
-        <h2>Geo / tolerância</h2>
-        <label className="field">
-          <span className="field-label">Raio de tolerância do check-in (m)</span>
-          <input className="field-input" type="number" defaultValue={150} disabled />
-        </label>
-        <p className="hint">
-          O geofence rígido entra em uma próxima versão; por enquanto o check-in
-          registra apenas as coordenadas.
-        </p>
-      </section>
+            <div className="field">
+              <label className="field-label" htmlFor="janelaInicio">
+                Início da janela
+              </label>
+              <input
+                id="janelaInicio"
+                className="field-input"
+                type="time"
+                value={form.janelaInicio}
+                onChange={(e) => update("janelaInicio", e.target.value)}
+              />
+            </div>
 
-      <section className="panel section">
-        <h2>Notificações</h2>
-        <label className="field">
-          <span className="field-label">Avisar operador ao registrar problema</span>
-          <input className="field-input" type="checkbox" defaultChecked disabled />
-        </label>
-      </section>
+            <div className="field">
+              <label className="field-label" htmlFor="janelaFim">
+                Fim da janela
+              </label>
+              <input
+                id="janelaFim"
+                className="field-input"
+                type="time"
+                value={form.janelaFim}
+                onChange={(e) => update("janelaFim", e.target.value)}
+              />
+            </div>
 
-      <div className="actions-row">
-        <button className="btn btn-primary" onClick={salvarEmBreve}>
-          Salvar configurações
-        </button>
-        <Link href="/" className="btn btn-ghost back-link">← Voltar</Link>
-      </div>
-    </main>
+            <div className="field">
+              <label className="field-label" htmlFor="raioGpsMetros">
+                Raio GPS (metros, mínimo 10)
+              </label>
+              <input
+                id="raioGpsMetros"
+                className="field-input"
+                type="number"
+                min={10}
+                step={1}
+                value={form.raioGpsMetros}
+                onChange={(e) =>
+                  update("raioGpsMetros", Number(e.target.value))
+                }
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary">
+              Salvar configurações
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={logout}>
+              Sair
+            </button>
+          </form>
+        )}
+      </main>
+    </div>
   );
 }
