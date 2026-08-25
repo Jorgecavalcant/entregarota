@@ -82,3 +82,10 @@ Nenhum dado é enviado à API nesse caso.
 - [ ] Pendência com menos de 3 caracteres fica desabilitada
 - [ ] Sair limpa o token e volta para /entrar
 - [ ] Em prod, app e docs respondem no mesmo host
+
+
+## Ambiente nesta entrega (2026-08-25)
+
+- **GitHub `main` (após merge desta PR):** rotas Salto UX + light/dark + gaps desta missão.
+- **Produção `*.tech42.com.br`:** ainda pode estar no build antigo enquanto secrets `VPS_HOST`/`VPS_USER`/`VPS_SSH_KEY` não estiverem no GitHub Actions. Sem esses secrets o CD não atualiza a VPS.
+- **Como testar agora sem Docker Desktop:** na pasta do produto, API com venv (`make test` valida API) e `cd web && npm run dev` (aponta `NEXT_PUBLIC_API_URL` se a API não estiver em :8000).
