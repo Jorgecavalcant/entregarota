@@ -1,94 +1,123 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api, Rota, Parada } from "../../lib/api";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useRequireAuth } from "../../lib/useRequireAuth";
+import {
+  Parada,
+  Rota,
+  api,
+} from "../../lib/api";
 
-function badgeClass(status: string) {
-  if (status === "feita") return "badge badge--feita";
+function badgeFor(status: Parada["status"]) {
+  if (status === "feito") return "badge badge--feita";
   if (status === "problema") return "badge badge--problema";
   return "badge badge--pendente";
 }
 
+type CheckPhase = "gps" | "sending";
+
 export default function RotaPage() {
+  const { ready, logout } = useRequireAuth();
+  const router = useRouter();
+
   const [rota, setRota] = useState<Rota | null>(null);
-  const [erro, setErro] = useState("");
-  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
-  const [textoPend, setTextoPend] = useState<Record<number, string>>({});
+  const [erro, setErro] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [loadingCheckinId, setLoadingCheckinId] = useState<number | null>(null);
+  const [checkPhase, setCheckPhase] = useState<CheckPhase>("gps");
+  const [pendenciaAbertaId, setPendenciaAbertaId] = useState<number | null>(null);
+  const [pendenciaTexto, setPendenciaTexto] = useState("");
+  const [savingPendenciaId, setSavingPendenciaId] = useState<number | null>(null);
 
   const carregar = useCallback(async () => {
+    setLoading(true);
+    setErro(null);
     try {
       const rotas = await api.rotasHoje();
-      setErro("");
-      setRota(rotas[0] ?? null);
-      if (!rotas.length) setMsg("Nenhuma rota para hoje.");
-      else setMsg("");
-    } catch (e) {
-      setErro(String(e));
+      setRota(rotas.length > 0 ? rotas[0] : null);
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/rota");
+        return;
+      }
+      setErro("Não foi possível carregar a rota. Tente novamente.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    carregar();
-  }, [carregar]);
+    if (ready) carregar();
+  }, [ready, carregar]);
 
   async function fazerCheckin(p: Parada) {
-    setErro("");
+    setMsg(null);
+    setErro(null);
+    setLoadingCheckinId(p.id);
+    setCheckPhase("gps");
     try {
-      const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true })
-      );
-      await api.checkin(
-        p.id,
-        pos.coords.latitude,
-        pos.coords.longitude,
-        pos.coords.accuracy ?? undefined
-      );
-      setMsg(`Check-in ok na parada ${p.ordem}`);
-      await carregar();
-    } catch (e) {
-      const raw = String(e);
-      if (raw.includes("denied") || raw.includes("Permission")) {
-        setErro("Precisamos da sua localização só no check-in. Permita o GPS e tente de novo.");
-      } else {
-        setErro(raw);
+      let coords: GeolocationPosition;
+      try {
+        coords = await new Promise<GeolocationPosition>((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          })
+        );
+      } catch {
+        setErro(
+          "Precisamos da sua localização só no check-in. Permita o GPS e tente de novo."
+        );
+        return;
       }
+
+      setCheckPhase("sending");
+      await api.checkin(p.id, coords.coords.latitude, coords.coords.longitude);
+      setMsg(`Check-in registrado em ${p.endereco}.`);
+      await carregar();
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/rota");
+        return;
+      }
+      setErro(e.message || "Falha no check-in.");
+    } finally {
+      setLoadingCheckinId(null);
+      setCheckPhase("gps");
     }
   }
 
   async function registrarPendencia(p: Parada) {
-    const texto = textoPend[p.id]?.trim();
-    if (!texto || texto.length < 3) {
-      setErro("Descreva a pendência com pelo menos 3 caracteres.");
-      return;
-    }
+    const texto = pendenciaTexto.trim();
+    setErro(null);
+    setMsg(null);
+    setSavingPendenciaId(p.id);
     try {
       await api.pendencia(p.id, texto);
-      setMsg(`Pendência registrada na parada ${p.ordem}`);
-      setTextoPend((s) => ({ ...s, [p.id]: "" }));
-      setErro("");
+      setMsg(`Pendência registrada em ${p.endereco}.`);
+      setPendenciaAbertaId(null);
+      setPendenciaTexto("");
       await carregar();
-    } catch (e) {
-      setErro(String(e));
+    } catch (e: any) {
+      if (e.message === "AUTH_REQUIRED") {
+        router.push("/entrar?next=/rota");
+        return;
+      }
+      setErro(e.message || "Falha ao registrar pendência.");
+    } finally {
+      setSavingPendenciaId(null);
     }
   }
+
+  if (!ready) return null;
 
   if (loading) {
     return (
       <main className="shell">
-        <div className="brand-row">
-          <span className="brand-mark" aria-hidden="true" />
-          <p className="brand-name">EntregaRota</p>
-        </div>
-        <div className="state-block" role="status">
-          Carregando sua rota…
-        </div>
-        <Link className="back-link" href="/">
-          ← voltar
-        </Link>
+        <p className="hint">Carregando sua rota…</p>
       </main>
     );
   }
@@ -96,143 +125,136 @@ export default function RotaPage() {
   if (!rota) {
     return (
       <main className="shell">
-        <div className="brand-row">
-          <span className="brand-mark" aria-hidden="true" />
-          <p className="brand-name">EntregaRota</p>
-        </div>
-        <h1>Minha rota</h1>
-        {erro && (
-          <div className="alert alert--error" role="alert">
-            {erro}
-          </div>
-        )}
         <div className="state-block">
-          <p>{msg || "Nenhuma rota para hoje."}</p>
-          <p className="hint">Peça ao operador para montar a rota do dia.</p>
-          <Link className="btn btn-primary" href="/operador">
-            Ir ao operador
+          <h2>Nenhuma rota para hoje</h2>
+          <p className="hint">
+            Crie uma rota no painel do operador e adicione as paradas antes de
+            começar as entregas.
+          </p>
+          <Link href="/operador" className="btn btn-primary">
+            Ir para o operador
           </Link>
         </div>
-        <Link className="back-link" href="/">
-          ← voltar
-        </Link>
+        <button className="btn btn-secondary" onClick={logout}>Sair</button>
       </main>
     );
   }
 
-  const pontos = rota.paradas.filter((p) => p.lat != null && p.lng != null);
-  const total = rota.contagens.total_paradas || 0;
-  const feitas = rota.contagens.feitas || 0;
-  const pct = total ? Math.round((feitas / total) * 100) : 0;
+  const c = rota.contagens;
+  const pct =
+    c.total_paradas > 0 ? Math.round((c.feitas / c.total_paradas) * 100) : 0;
 
   return (
     <main className="shell">
-      <div className="brand-row">
-        <span className="brand-mark" aria-hidden="true" />
-        <p className="brand-name">EntregaRota</p>
-      </div>
+      <header className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <p className="eyebrow">Execução</p>
+          <h2>{rota.nome}</h2>
+        </div>
+        <button className="btn btn-secondary" onClick={logout}>Sair</button>
+      </header>
 
-      <p className="eyebrow">Rota do dia · {rota.data}</p>
-      <h1>{rota.nome}</h1>
-      <p className="hint">
-        Usamos o GPS só no momento do check-in, para confirmar que você está na parada.
-      </p>
-
-      <div className="stats" aria-label="Resumo da rota">
+      <div className="stats">
         <div className="stat">
-          <div className="stat-value">{rota.contagens.total_paradas}</div>
-          <div className="stat-label">Total</div>
+          <span className="stat-value">{c.total_paradas}</span>
+          <span className="stat-label">Total</span>
         </div>
         <div className="stat stat--done">
-          <div className="stat-value">{rota.contagens.feitas}</div>
-          <div className="stat-label">Feitas</div>
+          <span className="stat-value">{c.feitas}</span>
+          <span className="stat-label">Feitas</span>
         </div>
         <div className="stat stat--accent">
-          <div className="stat-value">{rota.contagens.pendentes}</div>
-          <div className="stat-label">Pendentes</div>
+          <span className="stat-value">{c.pendentes}</span>
+          <span className="stat-label">Pendentes</span>
         </div>
         <div className="stat stat--warn">
-          <div className="stat-value">{rota.contagens.problemas}</div>
-          <div className="stat-label">Problemas</div>
+          <span className="stat-value">{c.problemas}</span>
+          <span className="stat-label">Problemas</span>
         </div>
       </div>
 
-      <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${pct}% concluído`}>
-        <span style={{ width: `${pct}%` }} />
+      <div className="progress">
+        <div className="progress-bar" style={{ width: `${pct}%` }} />
+        <span>{pct}% concluído</span>
       </div>
 
-      {erro && (
-        <div className="alert alert--error" role="alert">
-          {erro}
-        </div>
-      )}
-      {msg && (
-        <div className="alert alert--ok" role="status">
-          {msg}
-        </div>
-      )}
+      {msg && <p className="alert alert--ok">{msg}</p>}
+      {erro && <p className="alert alert--error">{erro}</p>}
 
-      <ol className="timeline">
+      <section className="timeline">
         {rota.paradas.map((p) => (
-          <li key={p.id} className="parada">
-            <span className="parada-dot" data-status={p.status} aria-hidden="true" />
+          <article key={p.id} className="parada">
             <div className="parada-head">
-              <span className="parada-ordem">#{p.ordem}</span>
-              <span className="parada-endereco">{p.endereco}</span>
-              <span className={badgeClass(p.status)}>{p.status}</span>
+              <span className="parada-ordem">{p.ordem}</span>
+              <span className={`parada-dot parada-dot--${p.status}`} />
+              <h3 className="parada-endereco">{p.endereco}</h3>
+              <span className={badgeFor(p.status)}>{p.status}</span>
             </div>
-            <div className="parada-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => fazerCheckin(p)}
-                aria-label={`Fazer check-in na parada ${p.ordem}, ${p.endereco}`}
-              >
-                Check-in
-              </button>
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+              {p.status !== "feito" && (
+                <>
+                  <button
+                    className="btn btn-primary"
+                    disabled={loadingCheckinId !== null}
+                    onClick={() => fazerCheckin(p)}
+                  >
+                    {loadingCheckinId === p.id
+                      ? checkPhase === "gps"
+                        ? "Buscando GPS…"
+                        : "Registrando check-in…"
+                      : "Fazer check-in"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      setPendenciaAbertaId(
+                        pendenciaAbertaId === p.id ? null : p.id
+                      )
+                    }
+                  >
+                    Registrar problema
+                  </button>
+                </>
+              )}
+            </div>
+
+            {pendenciaAbertaId === p.id && p.status !== "feito" && (
               <div className="pendencia-row">
-                <label className="field" style={{ flex: 1, marginBottom: 0 }}>
-                  <span className="field-label">Pendência</span>
-                  <input
-                    className="field-input"
-                    placeholder="Descreva o que aconteceu"
-                    value={textoPend[p.id] ?? ""}
-                    onChange={(e) => setTextoPend((s) => ({ ...s, [p.id]: e.target.value }))}
-                    aria-label={`Texto da pendência da parada ${p.ordem}`}
-                  />
-                </label>
+                <input
+                  className="field-input"
+                  value={pendenciaTexto}
+                  onChange={(e) => setPendenciaTexto(e.target.value)}
+                  placeholder="O que aconteceu? (mínimo 3 caracteres)"
+                />
                 <button
-                  type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-primary"
+                  disabled={pendenciaTexto.trim().length < 3 || savingPendenciaId === p.id}
                   onClick={() => registrarPendencia(p)}
-                  aria-label={`Registrar pendência na parada ${p.ordem}`}
                 >
-                  Registrar
+                  {savingPendenciaId === p.id ? "Salvando…" : "Salvar"}
                 </button>
               </div>
-            </div>
-          </li>
+            )}
+
+            {(p.lat != null || p.lng != null || p.checked_at) && (
+              <details className="coords">
+                <summary>Ver pontos</summary>
+                <code>
+                  lat {p.lat != null ? p.lat.toFixed(6) : "—"}, lng{" "}
+                  {p.lng != null ? p.lng.toFixed(6) : "—"}
+                  {p.accuracy_m != null ? ` · ±${Math.round(p.accuracy_m)}m` : ""}
+                  {p.checked_at ? ` · ${new Date(p.checked_at).toLocaleString()}` : ""}
+                </code>
+              </details>
+            )}
+          </article>
         ))}
-      </ol>
+      </section>
 
-      <h2 className="h2" style={{ marginTop: 32 }}>
-        Pontos registrados ({pontos.length})
-      </h2>
-      {pontos.length === 0 ? (
-        <p className="hint">Ainda sem coordenadas — faça o primeiro check-in.</p>
-      ) : (
-        <ul className="coords">
-          {pontos.map((p) => (
-            <li key={p.id}>
-              #{p.id}: {p.lat?.toFixed(5)}, {p.lng?.toFixed(5)} ({p.status})
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <Link className="back-link" href="/">
-        ← voltar
-      </Link>
+      <footer style={{ marginTop: "16px" }}>
+        <Link href="/operador" className="back-link">← Voltar ao operador</Link>
+      </footer>
     </main>
   );
 }
